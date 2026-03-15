@@ -38,6 +38,26 @@ UGER = {
     13: "Andenordens differentialligninger",
 }
 
+# Kompendium-mappen
+KOMPENDIUM_DIR = Path("kompendium")
+
+# Kompendium-filer pr. uge
+KOMPENDIUM_FILER = {
+    1:  "uge01_udsagnslogik.md",
+    2:  "uge02_maengder_funktioner.md",
+    3:  "uge03_komplekse_tal.md",
+    4:  "uge04_polar_form_polynomier.md",
+    5:  "uge05_polynomier_induktion.md",
+    6:  "uge06_lineaere_systemer.md",
+    7:  "uge07_matrixalgebra_determinanter.md",
+    8:  "uge08_udspaending_basis.md",
+    9:  "uge09_generelle_vektorrum.md",
+    10: "uge10_lineaere_afbildninger.md",
+    11: "uge11_egenvaerdier.md",
+    12: "uge12_differentialligninger.md",
+    13: "uge13_andenordens_ode.md",
+}
+
 # ──────────────────────────────────────────────
 # HJÆLPEFUNKTIONER TIL FILINDLÆSNING
 # ──────────────────────────────────────────────
@@ -335,12 +355,12 @@ def vis_sidebar() -> tuple[str, int | None]:
 
         tilstand = st.radio(
             "Vælg tilstand:",
-            ["📖 Forelæsning", "✏️ Opgavetutor", "🧠 Quiz", "🔍 Begrebsopslag"],
+            ["📚 Kompendium", "📖 Forelæsning", "✏️ Opgavetutor", "🧠 Quiz", "🔍 Begrebsopslag"],
             index=0,
         )
 
         valgt_uge = None
-        if tilstand in ["📖 Forelæsning", "✏️ Opgavetutor", "🧠 Quiz"]:
+        if tilstand in ["📚 Kompendium", "📖 Forelæsning", "✏️ Opgavetutor", "🧠 Quiz"]:
             st.divider()
             if tilstand == "🧠 Quiz":
                 valgt_uge = None  # Quiz bruger sit eget valg
@@ -358,6 +378,107 @@ def vis_sidebar() -> tuple[str, int | None]:
         )
 
     return tilstand, valgt_uge
+
+
+# ──────────────────────────────────────────────
+# SIDE: KOMPENDIUM
+# ──────────────────────────────────────────────
+
+def vis_kompendium(uge_nr: int):
+    """Viser kompendiet for en given uge med navigation mellem sektioner."""
+    oversigt = parse_ugeoversigt(uge_nr)
+
+    st.header(f"📚 Kompendium – Uge {uge_nr}: {oversigt['emne']}")
+
+    # Læs kompendium-fil
+    kompendium_fil = KOMPENDIUM_FILER.get(uge_nr)
+    if not kompendium_fil:
+        st.warning(f"Intet kompendium tilgængeligt for uge {uge_nr}.")
+        return
+
+    sti = KOMPENDIUM_DIR / kompendium_fil
+    if not sti.exists():
+        st.warning(
+            f"Kompendium-filen `{kompendium_fil}` blev ikke fundet i "
+            f"`{KOMPENDIUM_DIR}/`. Tjek at filen er kopieret korrekt."
+        )
+        return
+
+    indhold = sti.read_text(encoding="utf-8")
+
+    # Parse sektioner (split på ## overskrifter)
+    sektioner = re.split(r"\n(?=## )", indhold)
+
+    # Første sektion er titlen (# overskrift) – vis altid
+    titel_sektion = sektioner[0] if sektioner else ""
+
+    # Fjern titel-overskriften (vi har vores egen header)
+    titel_sektion = re.sub(r"^#\s+.*\n", "", titel_sektion).strip()
+
+    # Resterende sektioner
+    emne_sektioner = sektioner[1:] if len(sektioner) > 1 else []
+
+    # Byg navigation
+    emne_titler = []
+    for sek in emne_sektioner:
+        match = re.match(r"##\s+(.+)", sek)
+        if match:
+            emne_titler.append(match.group(1).strip())
+        else:
+            emne_titler.append("Ukendt afsnit")
+
+    if not emne_titler:
+        # Ingen sektioner – vis alt
+        st.markdown(indhold)
+        return
+
+    # Pensum-info
+    if oversigt["pensum"]:
+        st.info(f"📖 **Pensum:** {oversigt['pensum']}")
+
+    # Vis indholdsfortegnelse
+    st.markdown("### 📋 Indholdsfortegnelse")
+    for i, titel in enumerate(emne_titler, 1):
+        st.markdown(f"{i}. {titel}")
+
+    st.divider()
+
+    # Vis-tilstand: Alt på én gang eller sektion for sektion
+    vis_alt = st.toggle("Vis alt på én gang", value=False)
+
+    if vis_alt:
+        for sek in emne_sektioner:
+            st.markdown(sek)
+            st.divider()
+    else:
+        # Vis én sektion ad gangen
+        valgt_sektion = st.selectbox(
+            "Vælg afsnit:",
+            range(len(emne_titler)),
+            format_func=lambda i: f"{i+1}. {emne_titler[i]}",
+        )
+
+        st.markdown(emne_sektioner[valgt_sektion])
+
+        # Navigation
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if valgt_sektion > 0:
+                if st.button(f"⬅️ {emne_titler[valgt_sektion - 1][:25]}..."):
+                    st.session_state["_nav"] = valgt_sektion - 1
+                    st.rerun()
+        with col3:
+            if valgt_sektion < len(emne_titler) - 1:
+                if st.button(f"➡️ {emne_titler[valgt_sektion + 1][:25]}..."):
+                    st.session_state["_nav"] = valgt_sektion + 1
+                    st.rerun()
+
+    # Tip i bunden
+    st.divider()
+    st.success(
+        "💡 **Tip:** Når du har læst kompendiet, skift til **✏️ Opgavetutor** "
+        "og prøv at løse opgaverne for denne uge!"
+    )
 
 
 # ──────────────────────────────────────────────
@@ -695,7 +816,9 @@ def main():
 
     tilstand, valgt_uge = vis_sidebar()
 
-    if tilstand == "📖 Forelæsning":
+    if tilstand == "📚 Kompendium":
+        vis_kompendium(valgt_uge)
+    elif tilstand == "📖 Forelæsning":
         vis_forelæsning(valgt_uge)
     elif tilstand == "✏️ Opgavetutor":
         vis_opgavetutor(valgt_uge)
